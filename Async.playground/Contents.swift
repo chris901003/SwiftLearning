@@ -168,7 +168,118 @@ func fetchFull(userIDs: [Int]) async -> [User] {
     }))
 }
 
-Task {
-    var users: [User] = await fetchFull(userIDs: [1, 2, 3])
-    print(users)
+//Task {
+//    var users: [User] = await fetchFull(userIDs: [1, 2, 3])
+//    print(users)
+//}
+
+// Task的取消，也就是中斷Task當正在執行的內容
+enum CookError: Error {
+    case 切到手
 }
+
+func 切菜(切到手: Bool) async throws {
+    print("切菜")
+    try await Task.sleep(seconds: 1)
+    if 切到手 {
+        print("我切到手了，馬上去醫院")
+        throw CookError.切到手
+    }
+}
+
+@discardableResult
+func 煮飯() async throws -> String {
+    print("正在煮飯...")
+    try await Task.sleep(seconds: 2)
+    print("🍚煮好了")
+    return "🍚"
+}
+
+@discardableResult
+func 蒸魚() async throws -> String {
+    print("正在蒸魚...")
+    try await Task.sleep(seconds: 2)
+    print("🐟蒸好了")
+    return "🐟"
+}
+
+@discardableResult
+func 炒菜() async throws -> String {
+    print("正在炒菜...")
+    try await Task.sleep(seconds: 1)
+    print("🥗炒好了")
+    return "🥗"
+}
+
+func asyncCooking(切到手: Bool) async {
+    async let rice = 煮飯()
+    async let fish = 蒸魚()
+    do {
+        try await 切菜(切到手: 切到手)
+        let vegetable = try await 炒菜()
+        print("上菜了 \(vegetable) \(try await rice) \(try await fish)")
+    } catch {
+        print("停止煮飯，原因: \(error)")
+    }
+}
+
+func taskCooking(切到手: Bool) {
+    var dishes = ""
+    let callback = { @MainActor (dish: String) -> Void in
+        dishes += dish
+        if dishes.count == 3 {
+            print("上菜了\(dishes)")
+        }
+    }
+    let rice = Task {
+        do {
+            let riceResult = try await 煮飯()
+            await callback(riceResult)
+        } catch {
+            print("停止煮飯，原因: \(error)")
+        }
+    }
+    let fish = Task {
+        do {
+            let fishResult = try await 蒸魚()
+            await callback(fishResult)
+        } catch {
+            print("停止蒸魚，原因: \(error)")
+        }
+    }
+    Task {
+        do {
+            try await 切菜(切到手: 切到手)
+            let vegetableResult = try await 炒菜()
+            await callback(vegetableResult)
+        } catch {
+            print("停止切菜，原因: \(error)")
+            rice.cancel()
+            fish.cancel()
+        }
+    }
+}
+
+func taskCookingTask(切到手: Bool) async {
+    let rice = Task { try await 煮飯() }
+    let fish = Task { try await 蒸魚() }
+    let vegetable = Task { () -> String in
+        try await 切菜(切到手: 切到手)
+        return try await 炒菜()
+    }
+    do {
+        print("上菜了 \(try await vegetable.value) \(try await rice.value) \(try await fish.value)")
+    } catch CookError.切到手 {
+        rice.cancel()
+        fish.cancel()
+        print("取消煮飯和蒸魚")
+    } catch {
+        print("無法完成晚餐")
+    }
+}
+
+//Task {
+//    await asyncCooking(切到手: true)
+//    await taskCookingTask(切到手: true)
+//}
+//taskCooking(切到手: false)
