@@ -283,3 +283,24 @@ func taskCookingTask(切到手: Bool) async {
 //    await taskCookingTask(切到手: true)
 //}
 //taskCooking(切到手: false)
+
+
+// 取消任務的時間點
+
+@Sendable
+func doingSomethingBusy() throws {
+    let startTime = Date.now
+    try Task.checkCancellation()
+    (1...400).reduce(0) {
+        $0 + (1...$1).reduce(0, +)
+    }
+    try Task.checkCancellation()
+}
+
+Task {
+    await withThrowingTaskGroup(of: Void.self) { group in
+        group.addTask(operation: doingSomethingBusy)
+        group.addTask(operation: doingSomethingBusy)
+        group.cancelAll()
+    }
+}
